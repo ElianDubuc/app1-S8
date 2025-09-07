@@ -23,11 +23,12 @@ class FullyConnectedLayer(Layer):
         raise NotImplementedError()
 
     def get_buffers(self):
-        return None
+        return {}
         raise NotImplementedError()
 
     def forward(self, x):
-        return x @ self.weights.T + self.biases, x
+        a=(x @ self.weights.T) + self.biases
+        return a, x
         raise NotImplementedError()
 
     def backward(self, output_grad, cache):
@@ -133,7 +134,8 @@ class Sigmoid(Layer):
 
     def forward(self, x):
         dict = {'x': x}
-        return 1 / (1 + np.exp(-x)), dict
+        a=1 / (1 + np.exp(-x))
+        return a, dict
         raise NotImplementedError()
 
     def backward(self, output_grad, cache):
