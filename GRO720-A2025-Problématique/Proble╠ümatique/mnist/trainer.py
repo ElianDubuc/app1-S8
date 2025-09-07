@@ -30,6 +30,7 @@ class MnistTrainer(Trainer):
         self._training_loss_metric.clear()
         self._training_accuracy_metric.clear()
 
+
     def _measure_training_metrics(self, loss, network_output, target):
         self._training_loss_metric.add(loss.item())
         self._training_accuracy_metric.add(network_output, target)
