@@ -29,7 +29,6 @@ def create_network(checkpoint_path):
         BatchNormalization(32, 0.01),
         ReLU(),
         FullyConnectedLayer(32, 10),
-        #softmax()
     ]
     network = Network(layers)
     if checkpoint_path is not None:
