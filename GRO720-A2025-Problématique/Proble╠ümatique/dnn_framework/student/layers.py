@@ -9,8 +9,8 @@ class FullyConnectedLayer(Layer):
     """
 
     def __init__(self, input_count, output_count):
-        # Initialize the weights with small random values, to prevent from vanishing gradient or exploding gradient Xavier initializer
-
+        #sqrt((2 / (input + output)))   Permet d'avoir une uniformité entre les variances des données e/s, init les params à des valeurs plus cohérentes que du hasard pur
+        #Random simple fonctionne aussi mais apporte une plus faible précision au final
         variance_w = 2 / (input_count + output_count)
         self.weights = np.random.randn(output_count, input_count) * np.sqrt(variance_w)
 
@@ -27,7 +27,7 @@ class FullyConnectedLayer(Layer):
         raise NotImplementedError()
 
     def forward(self, x):
-        a=(x @ self.weights.T) + self.biases
+        a=(x @ self.weights.T) + self.biases #y = x*Wt + b
         return a, x
         raise NotImplementedError()
 
@@ -147,6 +147,9 @@ class Sigmoid(Layer):
 class ReLU(Layer):
     """
     This class implements a ReLU activation function.
+
+    < 0 -> 0
+
     """
 
     def get_parameters(self):
@@ -160,6 +163,7 @@ class ReLU(Layer):
         raise NotImplementedError()
 
     def forward(self, x):
+        #dict en vue de rétropropag
         dict = {'x': x}
         a = np.maximum(0, x)
         return a, dict
