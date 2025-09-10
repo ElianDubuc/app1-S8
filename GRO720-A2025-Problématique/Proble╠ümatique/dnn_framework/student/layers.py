@@ -11,12 +11,8 @@ class FullyConnectedLayer(Layer):
     def __init__(self, input_count, output_count):
         #sqrt((2 / (input + output)))   Permet d'avoir une uniformité entre les variances des données e/s, init les params à des valeurs plus cohérentes que du hasard pur
         #Random simple fonctionne aussi mais apporte une plus faible précision au final
-        variance_w = 2 / (input_count + output_count)
-        self.weights = np.random.randn(output_count, input_count) * np.sqrt(variance_w)
-
-        variance_b = 2 / output_count
-        self.biases = np.random.randn(1, output_count) * np.sqrt(variance_b)
-
+        self.weights = np.random.randn(output_count, input_count) * (2 / (input_count + output_count)) ** 0.5
+        self.biases = np.random.randn(1, output_count) * (2 / output_count) ** 0.5
 
     def get_parameters(self):
         return {'w' : self.weights,  'b': self.biases}
@@ -48,22 +44,19 @@ class BatchNormalization(Layer):
     def __init__(self, input_count, alpha=0.1):
         super().__init__()
 
+        self.alpha = alpha
         self.gamma = np.ones((input_count,))
         self.beta = np.zeros((input_count,))
 
-        self.running_mean = np.zeros((input_count,))
-        self.running_variance = np.ones((input_count,))
-
-        self.alpha = alpha
-
-        self.safety = 1e-07
+        self.mbl_mean = np.zeros((input_count,))
+        self.mbl_vari = np.ones((input_count,))
 
     def get_parameters(self):
         return {'gamma': self.gamma, 'beta': self.beta}
         raise NotImplementedError()
 
     def get_buffers(self):
-        return {'global_mean': self.running_mean, 'global_variance': self.running_variance}
+        return {'global_mean': self.mbl_mean, 'global_variance': self.mbl_vari}
         raise NotImplementedError()
 
     def forward(self, x):
@@ -74,43 +67,38 @@ class BatchNormalization(Layer):
         raise NotImplementedError()
 
     def _forward_training(self, x):
-        batch_mean = np.mean(x, axis=0)
-        batch_variance = np.var(x, axis=0)
+        epch_mean = np.mean(x, axis=0)
+        epch_variance = np.var(x, axis=0)
 
-        x_normalized = (x - batch_mean) / (np.sqrt(batch_variance) + self.safety)
-        y = self.gamma * x_normalized + self.beta
+        xNorm = (x - epch_mean) / (np.sqrt(epch_variance) + 1e-07)
+        y = self.gamma * xNorm + self.beta
 
-        self.running_mean = self.alpha * self.running_mean + (1 - self.alpha) * batch_mean
-        self.running_variance = self.alpha * self.running_variance + (1 - self.alpha) * batch_variance
+        self.mbl_mean = self.alpha * self.mbl_mean + (1 - self.alpha) * epch_mean
+        self.mbl_vari = self.alpha * self.mbl_vari + (1 - self.alpha) * epch_variance
 
-        cache = (x, x_normalized, batch_mean, batch_variance)
+        cache = (x, xNorm, epch_mean, epch_variance)
         return y, cache
 
         raise NotImplementedError()
 
     def _forward_evaluation(self, x):
-        x_normalized = (x - self.running_mean) / (np.sqrt(self.running_variance) + self.safety)
-
-        y = self.gamma * x_normalized + self.beta
+        xNorm = (x - self.mbl_mean) / (np.sqrt(self.mbl_vari) + 1e-07)
+        y = self.gamma * xNorm + self.beta
 
         return y, None
 
     def backward(self, output_grad, cache):
-        x, x_normalized, batch_mean, batch_variance = cache
+        x, xNorm, epch_mean, epch_variance = cache
 
-        N = x.shape[0]
-
-        dgamma = np.sum(output_grad * x_normalized, axis=0)
+        dgamma = np.sum(output_grad * xNorm, axis=0)
         dbeta = np.sum(output_grad, axis=0)
 
-        dx_normalized = output_grad * self.gamma
+        dxNorm = output_grad * self.gamma
+        dvariance = np.sum(dxNorm * (x - epch_mean) * -0.5 * np.power(epch_variance, -1.5), axis=0)
+        dmean = np.sum(dxNorm * -1.0 / np.sqrt(epch_variance), axis=0) + dvariance * np.mean(-2.0 * (x - epch_mean), axis=0)
 
-        dvariance = np.sum(dx_normalized * (x - batch_mean) * -0.5 * np.power(batch_variance, -1.5), axis=0)
-
-        dmean = np.sum(dx_normalized * -1.0 / np.sqrt(batch_variance), axis=0) + dvariance * np.mean(
-            -2.0 * (x - batch_mean), axis=0)
-
-        dx = (dx_normalized / np.sqrt(batch_variance)) + (dvariance * 2.0 * (x - batch_mean) / N) + (dmean / N)
+        N = x.shape[0]
+        dx = (dxNorm / np.sqrt(epch_variance)) + (dvariance * 2.0 * (x - epch_mean) / N) + (dmean / N)
 
         return dx, {'gamma': dgamma, 'beta': dbeta}
 
